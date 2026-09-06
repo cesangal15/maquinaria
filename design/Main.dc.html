@@ -170,11 +170,11 @@
     <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
       <div class="syne" style="font-weight:700;font-size:19px">Producción diaria del período</div>
       <div style="flex:1;height:1px;background:{{t.rule}};min-width:40px"></div>
-      <div style="font-size:11.5px;color:{{t.mut}}">Curva punteada = media acumulada día a día · escala propia, máx 2.647 m³</div>
+      <div style="font-size:11.5px;color:{{t.mut}}">Curva punteada = media acumulada día a día · <b style="color:{{acento}}">eje propio, logarítmico 132 → 2.647 m³</b></div>
     </div>
-    <div style="display:grid;grid-template-columns:58px 1fr;gap:0 12px;align-items:end">
+    <div style="display:grid;grid-template-columns:58px 1fr 46px;gap:0 12px;align-items:end">
       <div class="tnum" style="font-size:10px;color:{{t.mut}};text-align:right;padding-bottom:3px">2.952<br><span style="font-size:9.5px">m³ máx</span></div>
-      <div style="position:relative;height:212px;border-bottom:1px solid {{t.ink}}">
+      <div style="position:relative;height:212px;border-bottom:1px solid {{t.ink}}" id="plot">
         <div style="position:absolute;inset:0;display:flex;gap:5px">
           <sc-for list="{{dias}}" as="d" hint-placeholder-count="27">
             <div style="flex:1;background:{{d.bg}}"></div>
@@ -193,13 +193,21 @@
         </div>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"
              style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none">
+          <sc-for list="{{ejeMed}}" as="e" hint-placeholder-count="4">
+            <line x1="0" y1="{{e.y}}" x2="100" y2="{{e.y}}" stroke="{{t.rule}}" stroke-width="1"
+                  stroke-dasharray="2 6" vector-effect="non-scaling-stroke" opacity="0.7"></line>
+          </sc-for>
           <sc-for list="{{curvas}}" as="c" hint-placeholder-count="4">
             <polyline points="{{c.pts}}" fill="none" stroke="{{c.c}}" stroke-width="1.6"
                       stroke-dasharray="3 2.4" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline>
           </sc-for>
         </svg>
       </div>
-      <div></div>
+      <div style="position:relative">
+        <sc-for list="{{ejeMed}}" as="e" hint-placeholder-count="4">
+          <div class="tnum" style="position:absolute;right:0;top:{{e.top}};font-size:9.5px;color:{{t.mut}};transform:translateY(-50%)">{{e.v}}</div>
+        </sc-for>
+      </div>
       <div style="display:flex;flex-direction:column;gap:6px;padding-top:5px">
         <div style="display:flex;gap:5px">
           <sc-for list="{{dias}}" as="d" hint-placeholder-count="27">
@@ -439,11 +447,23 @@ class Component extends DCLogic {
       2:[265,132,392,418,381,317,272,238,287,361,452,439,482,447,417,391,387,365,441,439,418,419,405,406,405,391,377],
       3:[650,647,537,473,459,451,432,378,336,302,275,252,232,216,201,189,204,237,247,234,223,213,204,195,188,180,174]
     };
-    const maxMed = 2647, nD = D.length;
+    /* EJE SECUNDARIO LOGARÍTMICO para las medias.
+       Las cuatro medias van de 132 a 2.647 m³ — un factor de 20 —, así que en
+       un eje lineal, sea el de las barras o uno secundario propio, subbase y
+       BTC quedan aplastadas contra el suelo y no se lee su tendencia. En
+       agosto el eje secundario lineal ni siquiera ampliaba: la media mayor
+       (2.647) es el 90% de la barra mayor (2.952).
+       En logarítmico las cuatro reparten la altura y se cruzan. Se conserva
+       el ORDEN y las PROPORCIONES —el doble sigue dibujándose por encima—,
+       pero la distancia vertical ya no es proporcional a la diferencia: por
+       eso el eje va rotulado con sus dos extremos. */
+    const medLo = 132, medHi = 2647, nD = D.length;
+    const logR = Math.log(medHi) - Math.log(medLo);
+    const yLog = v => 100 - (Math.log(Math.max(v, medLo)) - Math.log(medLo)) / logR * 100;
     const curvas = [0,1,2,3].map(j => ({
       c: C[j],
       pts: MED[j].map((v, i) => ((i + .5) / nD * 100).toFixed(2) + ',' +
-             (100 - Math.min(100, v / maxMed * 100)).toFixed(2)).join(' ')
+             yLog(v).toFixed(2)).join(' ')
     }));
 
     // ---------- planificado, avance, aprovechamiento ----------
@@ -467,7 +487,12 @@ class Component extends DCLogic {
       { n:'No aprovechable', v:'10.420 m³', p:'31%', sw:t.mut }
     ];
 
-    return { t, acento, periodos, sel, ufs, chain, dias, curvas, plan, avance, comp,
+    // marcas del eje logarítmico, para que la escala se pueda leer
+    const ejeMed = [2647, 1000, 400, 132].map(v => ({
+      v: f0(v), y: yLog(v).toFixed(1), top: yLog(v).toFixed(1) + '%'
+    }));
+
+    return { t, acento, periodos, sel, ufs, chain, dias, curvas, ejeMed, plan, avance, comp,
       leyenda: NOM.map((n, i) => ({ n, c: C[i] })),
       climaLeg: [{ n:'Soleado', c:CL.s }, { n:'Lluvias parciales', c:CL.p },
                  { n:'Lluvias', c:CL.l }, { n:'Sin registro', c:'transparent' }] };
